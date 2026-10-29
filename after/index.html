@@ -742,6 +742,41 @@
     .tcard .ver { display: none; }
     .score b { font-size: 48px; }
   }
+
+  /* ===== phones and tablets: no scroll-driven animation, every section is a normal static block ===== */
+  @media (max-width: 960px) {
+    .hero { height: auto; }
+    .hero-sticky { position: relative; height: 100svh; min-height: 560px; }
+    .stats { height: auto; }
+    .stats-stick { position: relative; height: auto; padding: 90px 0; }
+    .about { height: auto; }
+    .ab-stick { position: relative; height: auto; padding: 90px 0; }
+    .ab-photo { height: auto; aspect-ratio: 4 / 5; width: min(100%, 360px); }
+    .doors, .knock { display: none; }
+    .why { height: auto; }
+    .why-stick { position: relative; height: auto; padding: 90px 0; }
+    .band { height: auto; }
+    .band-stick { position: relative; height: auto; min-height: 80svh; padding: 100px 0; }
+    .rv, .rv.in, .proj.rv { opacity: 1 !important; transform: none !important; clip-path: none !important; transition: none !important; }
+    .proj img, .proj.in img { transform: none; translate: none; height: 100%; margin-top: 0; }
+
+    /* "Why choose us": simple stacked cards, photo on top and the promise underneath, no flipping */
+    .deal { grid-template-columns: 1fr; gap: 18px; }
+    .wcard { height: auto; transform: none !important; perspective: none; cursor: default; }
+    .wcard .w3d { transform: none !important; transform-style: flat; display: grid; border-radius: 22px; overflow: hidden; box-shadow: 0 24px 40px -28px rgba(20,34,59,.55); }
+    .wface { position: relative; inset: auto; border-radius: 0; box-shadow: none; backface-visibility: visible; -webkit-backface-visibility: visible; }
+    .wfront { height: 200px; }
+    .wfront .ft span { display: none; }
+    .wback { transform: none; padding: 22px 22px 20px; }
+    .wback h3 { font-size: 22px; margin: 6px 0 8px; }
+    .wback p, .wback .k { display: block; }
+    .wback p { font-size: 15px; }
+    .wback .proof { margin-top: 16px; }
+    .wback .proof b { font-size: 24px; }
+    .wback .proof span { font-size: 12px; }
+    .why-hint { display: none; }
+    .tape .yrs span:not(.red) { display: none; }
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; transition-delay: 0ms !important; }
   }
@@ -1134,7 +1169,9 @@
 <script>
   const body = document.body;
   /* smooth, weighted scrolling so every scroll-driven animation glides instead of stepping */
-  const lenis = !matchMedia('(prefers-reduced-motion: reduce)').matches && window.Lenis ? new Lenis({ lerp: .08, wheelMultiplier: .9, touchMultiplier: 1.4 }) : null;
+  /* phones and tablets get a calm, static page: no pinned or scroll-driven animation */
+  const flat = () => innerWidth <= 960;
+  const lenis = !matchMedia('(prefers-reduced-motion: reduce)').matches && !flat() && window.Lenis ? new Lenis({ lerp: .08, wheelMultiplier: .9, touchMultiplier: 1.4 }) : null;
   if (lenis) (function raf(t) { lenis.raf(t); requestAnimationFrame(raf); })(performance.now());
   const smoothTo = (top, instant, dur) => lenis ? lenis.scrollTo(top, instant ? { immediate: true, force: true } : { duration: dur || 1.6, easing: x => 1 - Math.pow(1 - x, 4), force: true }) : scrollTo({ top, behavior: instant ? 'instant' : 'smooth' });
   const params = new URLSearchParams(location.search);
@@ -1215,6 +1252,7 @@
   let target = 0;
   const heroGeom = () => ({ top: heroEl.offsetTop, slideDist: innerHeight * SLIDE_SPAN * slides.length, shrinkDist: innerHeight * SHRINK_SPAN });
   function heroScroll() {
+    if (flat()) { segs.forEach((s, k) => s.querySelector('em').style.transform = `scaleX(${k <= cur ? 1 : 0})`); return 0; }
     const g = heroGeom(), d = scrollY - g.top;
     const sp = clamp01(d / g.slideDist) * slides.length;
     target = Math.min(slides.length - 1, Math.floor(sp));
@@ -1222,8 +1260,9 @@
     syncSlide();
     return clamp01((d - g.slideDist) / g.shrinkDist);
   }
-  function syncSlide() { if (!busy && !still && target !== cur) goTo(target, target > cur ? 1 : -1); }
+  function syncSlide() { if (!busy && !still && !flat() && target !== cur) goTo(target, target > cur ? 1 : -1); }
   function scrollToSlide(k) {
+    if (flat()) { goTo((k + slides.length) % slides.length, k > cur ? 1 : -1); return; }
     const g = heroGeom();
     const top = k >= slides.length ? g.top + g.slideDist + g.shrinkDist : g.top + Math.max(0, k) * innerHeight * SLIDE_SPAN + (k > 0 ? 4 : 0);
     smoothTo(top, reduce, 1.1);
@@ -1233,7 +1272,7 @@
      glides exactly to the next (or previous) slide, then waits for the gesture to end */
   let wheelLock = false, lockAt = 0, lastWheel = 0;
   addEventListener('wheel', e => {
-    if (reduce || still || pmOpen || callOpen || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    if (reduce || still || flat() || pmOpen || callOpen || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
     const g = heroGeom(), y = scrollY, dir = Math.sign(e.deltaY);
     const inSlides = y >= g.top - 2 && y < g.top + g.slideDist - 6;
     const leavingUp = dir < 0 && cur === 0, leavingDown = dir > 0 && cur === slides.length - 1;
@@ -1253,7 +1292,9 @@
 
   // dragging the photo sideways or the arrow keys also move between slides
   let swipeX = null;
-  $('#slides').addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') swipeX = e.clientX; });
+  $('#slides').addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' || flat()) swipeX = e.clientX; });
+  // on phones the hero moves to the next project by itself every few seconds
+  setInterval(() => { if (flat() && !busy && !still && !reduce && !document.hidden && scrollY < innerHeight * .8) goTo((cur + 1) % slides.length, 1); }, 6000);
   addEventListener('pointerup', e => { if (swipeX === null) return; const dx = e.clientX - swipeX; swipeX = null; if (Math.abs(dx) > 60) scrollToSlide(cur + (dx < 0 ? 1 : -1)); });
   addEventListener('keydown', e => {
     const g = heroGeom();
@@ -1287,7 +1328,7 @@
   new ResizeObserver(layoutTape).observe(tape); layoutTape();
   function statsScroll(vh) {
     const r = statsEl.getBoundingClientRect();
-    const p = still || reduce ? 1 : clamp01(-r.top / (r.height - vh) / .82);
+    const p = still || reduce || flat() ? 1 : clamp01(-r.top / (r.height - vh) / .82);
     measure.style.setProperty('--tp', p.toFixed(4));
     const yrs = Math.round(p * YEARS);
     $('#tapeYear').textContent = YEAR0 + yrs;
@@ -1314,7 +1355,7 @@
   const seg = (p, a, b) => clamp01((p - a) / (b - a));
   function aboutScroll(vh) {
     const r = aboutEl.getBoundingClientRect();
-    const p = still || reduce ? 1 : clamp01(-r.top / (r.height - vh));
+    const p = still || reduce || flat() ? 1 : clamp01(-r.top / (r.height - vh));
     const wide = innerWidth > 960;
     // 0 → .3 door swings open
     const d = seg(p, .02, .3);
@@ -1336,7 +1377,7 @@
     // .76 → .94 timeline fills, chapters switch on
     const cp = seg(p, .76, .94);
     chapters.style.setProperty('--cp', cp.toFixed(3));
-    chaps.forEach((c, i) => c.classList.toggle('on', cp >= i / 3 + .02 || still || reduce));
+    chaps.forEach((c, i) => c.classList.toggle('on', cp >= i / 3 + .02 || still || reduce || flat()));
     // signature draws at the end
     abText.style.setProperty('--sg', seg(p, .9, 1).toFixed(3));
   }
@@ -1346,7 +1387,7 @@
   const FAN = [-9, -3, 3, 9];
   function whyScroll(vh) {
     const r = whyEl.getBoundingClientRect();
-    const p = still || reduce ? 1 : clamp01(-r.top / (r.height - vh));
+    const p = still || reduce || flat() ? 1 : clamp01(-r.top / (r.height - vh));
     const wide = innerWidth > 960;
     const dp = 1 - Math.pow(1 - clamp01(p / .3), 3); // deal-out progress
     const dr = deal.getBoundingClientRect(), cx = dr.left + dr.width / 2;
@@ -1381,6 +1422,7 @@
   /* ---------- projects: photos drift inside their tiles while scrolling ---------- */
   const tileImgs = $$('.proj img');
   function projParallax(vh) {
+    if (flat()) return;
     tileImgs.forEach(im => { const b = im.parentElement.getBoundingClientRect(); if (b.bottom < -50 || b.top > vh + 50) return; im.style.setProperty('--py', (((b.top + b.height / 2) / vh - .5) * -30).toFixed(1) + 'px'); });
   }
 
@@ -1388,7 +1430,7 @@
   const band = $('#band');
   function bandScroll(vh) {
     const r = band.getBoundingClientRect();
-    const p = still || reduce ? 1 : clamp01(-r.top / (r.height - vh));
+    const p = still || reduce || flat() ? 1 : clamp01(-r.top / (r.height - vh));
     const ease = x => 1 - Math.pow(1 - x, 3);
     band.style.setProperty('--p', p.toFixed(4));
     band.style.setProperty('--w', ease(clamp01(p / .55)).toFixed(4));
@@ -1409,7 +1451,7 @@
   const fIn = $('#fIn'), totop = $('#totop');
   function footScroll(vh) {
     const r = foot.getBoundingClientRect();
-    fIn.style.setProperty('--fr', still || reduce ? 1 : clamp01((vh - r.top) / (r.height * .9)).toFixed(4));
+    fIn.style.setProperty('--fr', still || reduce || flat() ? 1 : clamp01((vh - r.top) / (r.height * .9)).toFixed(4));
     const max = document.documentElement.scrollHeight - vh;
     totop.style.setProperty('--sp', clamp01(scrollY / max).toFixed(4));
   }
